@@ -1,32 +1,53 @@
 
+
 pipeline {
     agent any
 
+    environment {
+        IMAGE_NAME = "simple-php-app"
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        CONTAINER_NAME = "php-container"
+        HOST_PORT = "8081"
+    }
+
     stages {
 
-        stage('Check PHP Version') {
+        stage('Checkout Code') {
             steps {
-                bat 'php -v'
+                checkout scm
             }
         }
 
-        stage('Validate PHP Syntax') {
+        stage('Build Docker Image') {
             steps {
-                bat 'php -l index.php'
+                bat "docker build -t %IMAGE_NAME%:%IMAGE_TAG% ."
             }
         }
 
-        stage('Build Artifact') {
+        stage('Stop and Remove Old Container') {
             steps {
-                bat 'powershell Compress-Archive -Path * -DestinationPath build.zip -Force'
+                bat "docker stop %CONTAINER_NAME% || echo No running container"
+                bat "docker rm %CONTAINER_NAME% || echo No container to remove"
             }
         }
 
-        stage('Archive Artifact') {
+        stage('Run New Container') {
             steps {
-                archiveArtifacts artifacts: 'build.zip', fingerprint: true
+                bat "docker run -d -p %HOST_PORT%:80 --name %CONTAINER_NAME% %IMAGE_NAME%:%IMAGE_TAG%"
             }
         }
 
+    }
+
+    post {
+        success {
+            echo "Application successfully deployed at http://localhost:${HOST_PORT}"
+        }
+        failure {
+            echo "Build failed. Check logs."
+        }
+        always {
+            echo "Pipeline execution completed."
+        }
     }
 }
